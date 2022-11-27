@@ -19,6 +19,23 @@
  *      DEFINES
  *********************/
 #define TAG "st7789"
+
+#if defined CONFIG_LV_DISPLAY_USE_SPI_CS
+    #define USE_SOFTWARE_CS   0
+#else
+    #define USE_SOFTWARE_CS   1
+#endif
+
+#if USE_SOFTWARE_CS == 1
+    /// @note Do not control CS. CS permanently grounded
+    #define CS_SET(val)     // gpio_set_level(ST7789_CS, val)
+#else
+    #define CS_SET(val)
+#endif
+
+/// SPI frequency for LCD reading according the documentation
+#define SPI_TFT_SLOW_CLOCK_SPEED_HZ     (5 * 1000 * 1000)
+
 /**********************
  *      TYPEDEFS
  **********************/
@@ -33,6 +50,12 @@ typedef struct {
 /**********************
  *  STATIC PROTOTYPES
  **********************/
+
+static void st7789_cs_config(void);
+static void st7789_dc_config(void);
+static void st7789_rst_config(void);
+static void st7789_bckl_config(void);
+
 static void st7789_set_orientation(uint8_t orientation);
 
 static void st7789_send_cmd(uint8_t cmd);
@@ -42,6 +65,10 @@ static void st7789_send_color(void *data, uint16_t length);
 /**********************
  *  STATIC VARIABLES
  **********************/
+
+const st7789_id_t default_display_id = {
+    .u32_value = 0x00528585
+};
 
 /**********************
  *      MACROS
@@ -60,7 +87,6 @@ void st7789_init(void)
         {0xF7, {0x20}, 1},
         {0xEA, {0x00, 0x00}, 2},
         {ST7789_LCMCTRL, {0x2c}, 1},
-        {ST7789_IDSET, {0x11}, 1},
         {ST7789_VCMOFSET, {0x35, 0x3E}, 2},
         {ST7789_CABCCTRL, {0xBE}, 1},
         {ST7789_MADCTL, {0x00}, 1}, // Set to 0x28 if your display is flipped
@@ -90,23 +116,14 @@ void st7789_init(void)
     };
 
     //Initialize non-SPI GPIOs
-    gpio_pad_select_gpio(ST7789_DC);
-    gpio_set_direction(ST7789_DC, GPIO_MODE_OUTPUT);
-    gpio_pad_select_gpio(ST7789_RST);
-    gpio_set_direction(ST7789_RST, GPIO_MODE_OUTPUT);
-    
-#if ST7789_ENABLE_BACKLIGHT_CONTROL
-    gpio_pad_select_gpio(ST7789_BCKL);
-    gpio_set_direction(ST7789_BCKL, GPIO_MODE_OUTPUT);
-#endif
+
+    st7789_cs_config();
+    st7789_dc_config();
+    st7789_rst_config();
+    st7789_bckl_config();
 
     //Reset the display
-    gpio_set_level(ST7789_RST, 0);
-    vTaskDelay(100 / portTICK_RATE_MS);
-    gpio_set_level(ST7789_RST, 1);
-    vTaskDelay(100 / portTICK_RATE_MS);
-
-    printf("ST7789 initialization.\n");
+    st7789_hw_reset();
 
     //Send all the commands
     uint16_t cmd = 0;
@@ -193,28 +210,91 @@ void st7789_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * colo
 
 }
 
+void st7789_hw_reset(void) {
+    gpio_set_level(ST7789_RST, 0);
+    vTaskDelay(60 / portTICK_RATE_MS);
+    gpio_set_level(ST7789_RST, 1);
+    vTaskDelay(140 / portTICK_RATE_MS);
+}
+
+void st7789_nop(void)
+{
+    st7789_send_cmd(ST7789_NOP);
+}
+
+void st7789_sw_reset(void)
+{
+    st7789_send_cmd(ST7789_SWRESET);
+}
+
+st7789_id_t st7789_get_id(void)
+{
+    // According to IDF docs SPI rx buffer must be multiple of 4 bytes and aligned
+    uint8_t buff_rx[4] __aligned(4) = {0};
+    uint8_t cmd = ST7789_RDDID;
+
+    disp_wait_for_pending_transactions();
+
+    // Set SPI slow clock
+    disp_spi_change_device_speed(SPI_TFT_SLOW_CLOCK_SPEED_HZ);
+
+    CS_SET(0);
+
+    gpio_set_level(ST7789_DC, 0);
+    disp_spi_send_data(&cmd, 1);
+
+    disp_wait_for_pending_transactions();
+    gpio_set_level(ST7789_DC, 1);
+
+    // Receive transaction is devided by 2 transactions
+    // The first transaction transmits 1 dummy clock and then receives first byte
+    disp_spi_transaction(NULL, 1, (DISP_SPI_RECEIVE | DISP_SPI_SEND_POLLING | DISP_SPI_VARIABLE_DUMMY), &buff_rx[0], 0, 1);
+    // The second transaction receives other bytes
+    disp_spi_transaction(NULL, 2, (DISP_SPI_RECEIVE | DISP_SPI_SEND_POLLING), &buff_rx[1], 0, 0);
+
+    CS_SET(1);
+
+    // Set SPI default clock
+    disp_spi_change_device_speed(SPI_TFT_CLOCK_SPEED_HZ);
+
+    st7789_id_t id = {
+        .u32_value = *(uint32_t *)buff_rx
+    };
+
+    return id;
+}
+
 /**********************
  *   STATIC FUNCTIONS
  **********************/
 static void st7789_send_cmd(uint8_t cmd)
 {
     disp_wait_for_pending_transactions();
+
+    CS_SET(0);
     gpio_set_level(ST7789_DC, 0);
     disp_spi_send_data(&cmd, 1);
+    CS_SET(1);
 }
 
 static void st7789_send_data(void * data, uint16_t length)
 {
     disp_wait_for_pending_transactions();
+    
+    CS_SET(0);
     gpio_set_level(ST7789_DC, 1);
     disp_spi_send_data(data, length);
+    CS_SET(1);
 }
 
 static void st7789_send_color(void * data, uint16_t length)
 {
     disp_wait_for_pending_transactions();
+
+    CS_SET(0);
     gpio_set_level(ST7789_DC, 1);
     disp_spi_send_colors(data, length);
+    CS_SET(1);
 }
 
 static void st7789_set_orientation(uint8_t orientation)
@@ -240,4 +320,30 @@ static void st7789_set_orientation(uint8_t orientation)
 
     st7789_send_cmd(ST7789_MADCTL);
     st7789_send_data((void *) &data[orientation], 1);
+}
+
+static void st7789_cs_config(void) {
+#if USE_SOFTWARE_CS == 1
+    gpio_pad_select_gpio(ST7789_CS);
+    gpio_set_direction(ST7789_CS, GPIO_MODE_OUTPUT);
+    /// @note CS permanently grounded
+    gpio_set_level(ST7789_CS, 0);
+#endif
+}
+
+static void st7789_dc_config(void) {
+    gpio_pad_select_gpio(ST7789_DC);
+    gpio_set_direction(ST7789_DC, GPIO_MODE_OUTPUT);
+}
+
+static void st7789_rst_config(void) {
+    gpio_pad_select_gpio(ST7789_RST);
+    gpio_set_direction(ST7789_RST, GPIO_MODE_OUTPUT);
+}
+
+static void st7789_bckl_config(void) {
+#if ST7789_ENABLE_BACKLIGHT_CONTROL
+    gpio_pad_select_gpio(ST7789_BCKL);
+    gpio_set_direction(ST7789_BCKL, GPIO_MODE_OUTPUT);
+#endif
 }
