@@ -236,7 +236,7 @@ void uc8151d_init()
     // Initialise event group
     uc8151d_evts = xEventGroupCreate();
     if (!uc8151d_evts) {
-        ESP_LOGE(TAG, "Failed when initialising event group!");
+        STRAUSS_LOG(eRecordDisable, "Failed when initialising event group!");
         return;
     }
 

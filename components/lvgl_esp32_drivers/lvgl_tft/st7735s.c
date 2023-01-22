@@ -242,7 +242,7 @@ static void axp192_write_byte(uint8_t addr, uint8_t data)
 
 	ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, 10/portTICK_PERIOD_MS);
 	if (ret != ESP_OK) {
-		ESP_LOGE(TAG, "AXP192 send failed. code: 0x%.2X", ret);
+        STRAUSS_LOG(eRecordDisable, "AXP192 send failed. code: 0x%.2X", ret);
 	}
 	i2c_cmd_link_delete(cmd);
 }

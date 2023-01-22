@@ -439,7 +439,7 @@ void jd79653a_init()
     // Initialise event group
     jd79653a_evts = xEventGroupCreate();
     if (!jd79653a_evts) {
-        ESP_LOGE(TAG, "Failed when initialising event group!");
+        STRAUSS_LOG(eRecordDisable, "Failed when initialising event group!");
         return;
     }
 

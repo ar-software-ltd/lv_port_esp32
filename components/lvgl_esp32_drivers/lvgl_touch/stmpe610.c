@@ -74,7 +74,7 @@ void stmpe610_init(void)
 	// Verify SPI communication
 	u16 = read_16bit_reg(STMPE_CHIP_ID);
 	if (u16 != 0x811) {
-		ESP_LOGE(TAG, "Incorrect version: 0x%x", u16);
+        STRAUSS_LOG(eRecordDisable, "Incorrect version: 0x%x", u16);
 	}
 
 	write_8bit_reg(STMPE_SYS_CTRL2, 0x00); // Disable clocks
@@ -144,7 +144,7 @@ bool stmpe610_read(lv_indev_drv_t * drv, lv_indev_data_t * data)
     		// Clear the FIFO if we discover an overflow
     		write_8bit_reg(STMPE_FIFO_STA, STMPE_FIFO_STA_RESET);
 			write_8bit_reg(STMPE_FIFO_STA, 0); // unreset
-			ESP_LOGE(TAG, "Fifo overflow");
+            STRAUSS_LOG(eRecordDisable, "Fifo overflow");
 		}
     }
     
