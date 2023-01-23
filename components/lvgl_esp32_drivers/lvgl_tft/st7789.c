@@ -14,11 +14,12 @@
 
 #include "disp_spi.h"
 #include "driver/gpio.h"
-
+#include "../../main/element-hmi-platform/logic/logger.h"
 /*********************
  *      DEFINES
  *********************/
 #define TAG "st7789"
+#define LOG_SOURCE_ID LOG_SOURCE_TERMINAL
 /**********************
  *      TYPEDEFS
  **********************/
@@ -106,7 +107,7 @@ void st7789_init(void)
     gpio_set_level(ST7789_RST, 1);
     vTaskDelay(100 / portTICK_RATE_MS);
 
-    printf("ST7789 initialization.\n");
+    STRAUSS_LOG(eRecordDisable, "ST7789 initialization.\n");
 
     //Send all the commands
     uint16_t cmd = 0;
@@ -127,7 +128,7 @@ void st7789_init(void)
 void st7789_enable_backlight(bool backlight)
 {
 #if ST7789_ENABLE_BACKLIGHT_CONTROL
-    printf("%s backlight.\n", backlight ? "Enabling" : "Disabling");
+	STRAUSS_LOG(eRecordDisable, "%s backlight.\n", backlight ? "Enabling" : "Disabling");
     uint32_t tmp = 0;
 
 #if (ST7789_BCKL_ACTIVE_LVL==1)
