@@ -129,6 +129,7 @@ void st7789_nop(void);
 void st7789_sw_reset(void);
 void st7789_hw_reset(void);
 st7789_id_t st7789_get_id(void);
+void st7789_disp_on(void);
 
 #ifdef __cplusplus
 } /* extern "C" */
