@@ -33,15 +33,18 @@ typedef struct {
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-static void st7789_set_orientation(uint8_t orientation);
-
 static void st7789_send_cmd(uint8_t cmd);
 static void st7789_send_data(void *data, uint16_t length);
 static void st7789_send_color(void *data, uint16_t length);
 
+static void st7789_clear();
+static void st7789_set_orientation(uint8_t orientation);
+
 /**********************
  *  STATIC VARIABLES
  **********************/
+
+static bool send_color_use_spi_queued = true;
 
 /**********************
  *      MACROS
@@ -85,7 +88,6 @@ void st7789_init(void)
         {ST7789_GCTRL, {0x35}, 1},
         {0xB6, {0x0A, 0x82, 0x27, 0x00}, 4},
         {ST7789_SLPOUT, {0}, 0x80},
-        {ST7789_DISPON, {0}, 0x80},
         {0, {0}, 0xff},
     };
 
@@ -118,6 +120,11 @@ void st7789_init(void)
         }
         cmd++;
     }
+
+    st7789_clear();
+
+    st7789_disp_on();
+    vTaskDelay(100 / portTICK_RATE_MS);
 
     st7789_enable_backlight(true);
 
@@ -193,6 +200,11 @@ void st7789_flush(lv_disp_drv_t * drv, const lv_area_t * area, lv_color_t * colo
 
 }
 
+void st7789_disp_on(void)
+{
+    st7789_send_cmd(ST7789_DISPON);
+}
+
 /**********************
  *   STATIC FUNCTIONS
  **********************/
@@ -214,7 +226,13 @@ static void st7789_send_color(void * data, uint16_t length)
 {
     disp_wait_for_pending_transactions();
     gpio_set_level(ST7789_DC, 1);
-    disp_spi_send_colors(data, length);
+
+    if (send_color_use_spi_queued) {
+        disp_spi_send_colors(data, length);
+    }
+    else {
+        disp_spi_send_colors_polling(data, length);
+    }
 }
 
 static void st7789_set_orientation(uint8_t orientation)
@@ -240,4 +258,24 @@ static void st7789_set_orientation(uint8_t orientation)
 
     st7789_send_cmd(ST7789_MADCTL);
     st7789_send_data((void *) &data[orientation], 1);
+}
+
+static void st7789_clear() {
+    lv_color_t color[LV_HOR_RES_MAX] = {0};
+    lv_area_t area = {
+        .x1 = 0,
+        .x2 = LV_HOR_RES_MAX - 1
+    };
+
+    // Need use polling SPI method
+    send_color_use_spi_queued = false;
+
+    for (lv_coord_t y = 0; y < LV_VER_RES_MAX; y++) {
+        area.y1 = y;
+        area.y2 = y;
+
+        st7789_flush(NULL, &area, color);
+    }
+
+    send_color_use_spi_queued = true;
 }
