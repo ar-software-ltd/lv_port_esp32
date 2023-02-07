@@ -74,6 +74,10 @@ static inline void disp_spi_send_colors(uint8_t *data, size_t length) {
         NULL, 0, 0);
 }
 
+static inline void disp_spi_send_colors_polling(uint8_t *data, size_t length) {
+    disp_spi_transaction(data, length, DISP_SPI_SEND_POLLING, NULL, 0, 0);
+}
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
