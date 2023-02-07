@@ -17,6 +17,7 @@ extern "C"
 
 #include "sdkconfig.h"
 
+#define ST7789_CS       CONFIG_LV_DISP_SPI_CS
 #define ST7789_DC       CONFIG_LV_DISP_PIN_DC
 #define ST7789_RST      CONFIG_LV_DISP_PIN_RST
 #define ST7789_BCKL     CONFIG_LV_DISP_PIN_BCKL
@@ -33,6 +34,9 @@ extern "C"
 #define ST7789_NOP      0x00
 #define ST7789_SWRESET  0x01
 #define ST7789_RDDID    0x04
+#define ST7789_RDID1    0xDA
+#define ST7789_RDID2    0xDB
+#define ST7789_RDID3    0xDC
 #define ST7789_RDDST    0x09
 
 #define ST7789_RDDPM        0x0A    // Read display power mode
@@ -105,9 +109,27 @@ extern "C"
 #define ST7789_NVMSET       0xFC    // NVM setting
 #define ST7789_PROMACT      0xFE    // Program action
 
+struct st7789_id {
+    uint8_t manufacturer_id;
+    uint8_t driver_version_id;
+    uint8_t driver_id;
+};
+
+typedef union {
+    struct st7789_id fields;
+    uint32_t u32_value;
+} st7789_id_t;
+
+const st7789_id_t default_display_id;
+
 void st7789_init(void);
 void st7789_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map);
 void st7789_enable_backlight(bool backlight);
+void st7789_nop(void);
+void st7789_sw_reset(void);
+void st7789_hw_reset(void);
+st7789_id_t st7789_get_id(void);
+void st7789_disp_on(void);
 
 #ifdef __cplusplus
 } /* extern "C" */
